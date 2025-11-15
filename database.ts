@@ -14,6 +14,7 @@ export const SUBJECT_DATA: Subject[] = [
     { id: 'S5', name: 'Software Engineering' },
 ];
 
+// Fix: Add email addresses to faculty data to match the Faculty type.
 export const FACULTY_DATA: Faculty[] = [
     { id: 'ER', name: 'Dr. Evelyn Reed', subjectId: 'S1', email: 'e.reed@university.edu' },
     { id: 'BC', name: 'Dr. Ben Carter', subjectId: 'S3', email: 'b.carter@university.edu' },

@@ -6,8 +6,9 @@ import Scheduler from './components/Scheduler';
 import SchedulePrompt from './components/SchedulePrompt';
 import AIAssistant from './components/AIAssistant';
 import FacultyDirectory from './components/FacultyDirectory';
-import { MASTER_SCHEDULE, FACULTY_DATA, BATCH_DATA, CLASSROOM_DATA, getClassroomById, getBatchById } from './database';
-import type { Schedule, ScheduleEvent, DayOfWeek, DayGroupedSchedule, Faculty, Batch } from './types';
+import { MASTER_SCHEDULE, FACULTY_DATA, BATCH_DATA, CLASSROOM_DATA, getClassroomById, getBatchById, getSubjectById, getFacultyById } from './database';
+import type { Schedule, ScheduleEvent, DayOfWeek, DayGroupedSchedule, Faculty, Batch, AISuggestion, AppNotification } from './types';
+import { getScheduleSuggestion } from './services/geminiService';
 
 export type UserRole = 'faculty' | 'student';
 type View = 'landing' | 'login' | 'dashboard';
@@ -29,10 +30,22 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>('landing');
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [masterSchedule, setMasterSchedule] = useState<Schedule>(MASTER_SCHEDULE);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [initialPrompt, setInitialPrompt] = useState<string>('');
   const [scheduleView, setScheduleView] = useState<ScheduleView>('personal');
   const [selectedRoomId, setSelectedRoomId] = useState<string>(CLASSROOM_DATA[0].id);
   const [selectedBatchId, setSelectedBatchId] = useState<string>(BATCH_DATA[0].id);
+
+  const addNotification = (message: string, recipientId: string) => {
+    const newNotification: AppNotification = {
+      id: Date.now(),
+      message,
+      recipientId,
+      timestamp: new Date(),
+      read: false,
+    };
+    setNotifications(prev => [...prev, newNotification]);
+  };
 
   const handleLogin = (userId: string, role: UserRole) => {
     if (role === 'faculty') {
@@ -56,7 +69,10 @@ const App: React.FC = () => {
 
   const handleScheduleUpdate = (newEvent: ScheduleEvent) => {
     setMasterSchedule(prevSchedule => [...prevSchedule, newEvent]);
-    alert('New class has been successfully added to the schedule!');
+    addNotification(
+      `A new class, "${getSubjectById(newEvent.subjectId)?.name}", has been added to your schedule.`,
+      newEvent.batchId
+    );
   };
 
   const handleBulkScheduleUpdate = (newEvents: Omit<ScheduleEvent, 'id'>[]) => {
@@ -65,6 +81,14 @@ const App: React.FC = () => {
         id: `import-${Date.now()}-${index}`
     }));
     setMasterSchedule(prev => [...prev, ...eventsWithIds]);
+    // Notify all affected batches
+    const batchesAffected = [...new Set(newEvents.map(e => e.batchId))];
+    batchesAffected.forEach(batchId => {
+        addNotification(
+            `Multiple new classes have been imported and added to your schedule.`,
+            batchId
+        );
+    });
   };
 
   const handleVacantSlotClick = (day: DayOfWeek, startTime: string) => {
@@ -88,6 +112,175 @@ const App: React.FC = () => {
     }
   };
   
+  const handleEventStatusUpdate = (eventId: string, status: 'cancellation_requested' | 'reschedule_requested') => {
+    const event = masterSchedule.find(e => e.id === eventId);
+    if (event) {
+        const subject = getSubjectById(event.subjectId);
+        const batch = getBatchById(event.batchId);
+        const requestType = status === 'cancellation_requested' ? 'cancellation' : 'reschedule';
+        addNotification(
+            `A ${requestType} request was submitted for "${subject?.name}" by a student in ${batch?.name}.`,
+            event.facultyId
+        );
+    }
+
+    setMasterSchedule(prevSchedule =>
+      prevSchedule.map(event =>
+        event.id === eventId ? { ...event, status } : event
+      )
+    );
+  };
+
+  const handleApproveCancellation = (eventId: string) => {
+    const event = masterSchedule.find(e => e.id === eventId);
+    if (event) {
+        const subject = getSubjectById(event.subjectId);
+        addNotification(
+            `The cancellation for "${subject?.name}" on ${event.day} at ${event.startTime} has been approved.`,
+            event.batchId
+        );
+    }
+    setMasterSchedule(prevSchedule => prevSchedule.filter(e => e.id !== eventId));
+  };
+
+  const handleRejectCancellation = (eventId: string) => {
+    const event = masterSchedule.find(e => e.id === eventId);
+     if (event) {
+        const subject = getSubjectById(event.subjectId);
+        addNotification(
+            `Your cancellation request for "${subject?.name}" on ${event.day} was rejected.`,
+            event.batchId
+        );
+    }
+    setMasterSchedule(prevSchedule =>
+      prevSchedule.map(e => {
+        if (e.id === eventId) {
+          const { status, ...restOfEvent } = e;
+          return restOfEvent;
+        }
+        return e;
+      })
+    );
+  };
+  
+  const handleCancelClass = (eventId: string) => {
+    const event = masterSchedule.find(e => e.id === eventId);
+    if (event) {
+        const subject = getSubjectById(event.subjectId);
+        const faculty = getFacultyById(event.facultyId);
+        addNotification(
+            `The class "${subject?.name}" on ${event.day} at ${event.startTime} was cancelled by ${faculty?.name}.`,
+            event.batchId
+        );
+    }
+    setMasterSchedule(prevSchedule => prevSchedule.filter(e => e.id !== eventId));
+  };
+
+  const handleFindRescheduleSuggestions = async (eventToReschedule: ScheduleEvent): Promise<AISuggestion[]> => {
+    const scheduleForAnalysis = masterSchedule.filter(e => e.id !== eventToReschedule.id);
+    
+    const subject = getSubjectById(eventToReschedule.subjectId);
+    const batch = getBatchById(eventToReschedule.batchId);
+    const faculty = getFacultyById(eventToReschedule.facultyId);
+    const duration = parseInt(eventToReschedule.endTime.split(':')[0]) - parseInt(eventToReschedule.startTime.split(':')[0]);
+
+    if (!faculty) {
+      throw new Error("Cannot reschedule: The faculty member for this class could not be found.");
+    }
+
+    const prompt = `
+      You are an intelligent university timetable scheduling assistant.
+      Your task is to find alternative slots for a class that needs to be rescheduled.
+
+      Current Class Details:
+      - Subject: "${subject?.name}"
+      - Batch: "${batch?.name}"
+      - Faculty: "${faculty?.name}"
+      - Duration: ${duration} hour(s)
+      - Original Time: ${eventToReschedule.day} at ${eventToReschedule.startTime}
+
+      Constraints to consider:
+      1. No Overlaps: The new slot must be free for the faculty (${faculty?.name}), the student batch (${batch?.name}), and a suitable classroom.
+      2. Student Workload: Avoid suggesting a slot if it results in the student batch having more than 3 consecutive hours of classes.
+      3. Working Hours: Suggestions must be between 09:00 and 17:00.
+
+      University Master Schedule (with the original class removed for analysis):
+      ${JSON.stringify(scheduleForAnalysis, null, 2)}
+
+      Request:
+      Please find up to 3 suitable, conflict-free alternative slots for this class. If you find any valid slots, set 'isFeasible' to true and list them in 'suggestions'. Provide a brief reasoning for your analysis. Do not populate the 'newSchedule' field.
+    `;
+
+    try {
+      const result = await getScheduleSuggestion(prompt, scheduleForAnalysis, faculty);
+      return result.suggestions || [];
+    } catch (error) {
+      console.error("Failed to get reschedule options:", error);
+      throw error;
+    }
+  };
+
+  const handleCommitReschedule = (originalEventId: string, suggestion: AISuggestion) => {
+    const event = masterSchedule.find(e => e.id === originalEventId);
+    if (event) {
+        const subject = getSubjectById(event.subjectId);
+        addNotification(
+            `"${subject?.name}" has been rescheduled to ${suggestion.day} at ${suggestion.startTime}.`,
+            event.batchId
+        );
+    }
+
+    setMasterSchedule(prevSchedule => {
+      return prevSchedule.map(e => {
+        if (e.id === originalEventId) {
+          const classroom = CLASSROOM_DATA.find(c => c.name === suggestion.room);
+          if (!classroom) {
+            console.error(`Error: Classroom "${suggestion.room}" could not be found. Reschedule failed.`);
+            return e;
+          }
+          const { status, ...restOfEvent } = e;
+          return {
+            ...restOfEvent,
+            day: suggestion.day,
+            startTime: suggestion.startTime,
+            endTime: suggestion.endTime,
+            classroomId: classroom.id,
+          };
+        }
+        return e;
+      });
+    });
+  };
+
+  const handleRejectReschedule = (eventId: string) => {
+     const event = masterSchedule.find(e => e.id === eventId);
+     if (event) {
+        const subject = getSubjectById(event.subjectId);
+        addNotification(
+            `Your reschedule request for "${subject?.name}" on ${event.day} was rejected.`,
+            event.batchId
+        );
+    }
+    setMasterSchedule(prevSchedule =>
+      prevSchedule.map(e => {
+        if (e.id === eventId) {
+          const { status, ...restOfEvent } = e;
+          return restOfEvent;
+        }
+        return e;
+      })
+    );
+  };
+
+  const handleMarkNotificationsAsRead = () => {
+    if (!currentUser) return;
+    setNotifications(prev => 
+        prev.map(n => 
+            n.recipientId === currentUser.id && !n.read ? { ...n, read: true } : n
+        )
+    );
+  };
+
   const currentUserSchedule = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'faculty') {
@@ -103,6 +296,11 @@ const App: React.FC = () => {
   const batchSchedule = useMemo(() => {
     return masterSchedule.filter(event => event.batchId === selectedBatchId);
   }, [selectedBatchId, masterSchedule]);
+    
+  const currentUserNotifications = useMemo(() => {
+    if (!currentUser) return [];
+    return notifications.filter(n => n.recipientId === currentUser.id).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [currentUser, notifications]);
 
   const displayedSchedule = useMemo(() => {
     if (scheduleView === 'room') return roomSchedule;
@@ -142,7 +340,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      <Header userName={currentUser.name} userRole={currentUser.role} onLogout={handleLogout} />
+      <Header 
+        userName={currentUser.name} 
+        userRole={currentUser.role} 
+        onLogout={handleLogout}
+        notifications={currentUserNotifications}
+        onMarkNotificationsAsRead={handleMarkNotificationsAsRead}
+      />
       <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <h2 className="text-3xl font-bold capitalize">{scheduleTitle}</h2>
@@ -202,6 +406,13 @@ const App: React.FC = () => {
             allEvents={masterSchedule}
             currentUser={{id: currentUser.id, role: currentUser.role}}
             onVacantSlotClick={currentUser.role === 'faculty' ? handleVacantSlotClick : undefined}
+            onEventStatusUpdate={handleEventStatusUpdate}
+            onApproveCancellation={handleApproveCancellation}
+            onRejectCancellation={handleRejectCancellation}
+            onRejectReschedule={handleRejectReschedule}
+            onCancelClass={handleCancelClass}
+            onFindRescheduleSuggestions={handleFindRescheduleSuggestions}
+            onCommitReschedule={handleCommitReschedule}
         />
         
         {currentUser.role === 'faculty' && (

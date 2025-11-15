@@ -4,7 +4,12 @@ import type { Schedule, ChatMessage, AIAssistantProps } from '../types';
 import { BotIcon, UserIcon, SendIcon } from './Icons';
 
 const AIAssistant: React.FC<AIAssistantProps> = ({ masterSchedule, currentUser }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      role: 'assistant',
+      content: `Hello ${currentUser.name}! How can I help you with the schedule today?`
+    }
+  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +39,12 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ masterSchedule, currentUser }
       setLoading(false);
     }
   };
+
+  const examplePrompts = [
+      "What's my first class on Monday?",
+      "Are there any free lab rooms on Friday afternoon?",
+      "Which faculty teaches Compilers?",
+  ];
 
   return (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg mt-6">
@@ -71,6 +82,22 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ masterSchedule, currentUser }
          )}
         <div ref={chatEndRef} />
       </div>
+      
+      {messages.length === 1 && (
+          <div className="mb-4">
+              <div className="flex flex-wrap gap-2">
+                  {examplePrompts.map(prompt => (
+                      <button 
+                          key={prompt} 
+                          onClick={() => setInput(prompt)}
+                          className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-1.5 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                      >
+                          {prompt}
+                      </button>
+                  ))}
+              </div>
+          </div>
+      )}
 
       {error && <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-200 rounded-lg text-sm">{error}</div>}
 

@@ -10,31 +10,42 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [activeTab, setActiveTab] = useState<UserRole>('faculty');
   const [selectedUserId, setSelectedUserId] = useState<string>(FACULTY_DATA[0].id);
-  // FIX: Initialize password state. An uninitialized useState() hook would infer the type as 'unknown',
-  // which is not assignable to an input's `value` property and causes a type error.
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Reset selection when tab changes
+    // Reset selection and fields when tab changes
     if (activeTab === 'faculty') {
       setSelectedUserId(FACULTY_DATA[0].id);
     } else {
       setSelectedUserId(BATCH_DATA[0].id);
     }
+    setEmail('');
+    setPassword('');
+    setError(null);
   }, [activeTab]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(selectedUserId, activeTab);
+    setError(null); // Clear previous errors
+
+    if (activeTab === 'faculty') {
+      const facultyUser = FACULTY_DATA.find(f => f.id === selectedUserId);
+      if (facultyUser && facultyUser.email.toLowerCase() === email.trim().toLowerCase()) {
+        onLogin(selectedUserId, activeTab);
+      } else {
+        setError('Email address does not match the selected faculty account.');
+      }
+    } else {
+      // Student login doesn't require email verification
+      onLogin(selectedUserId, activeTab);
+    }
   };
 
   const activeClass = 'border-indigo-600 text-indigo-600 dark:text-indigo-400';
   const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200';
   
-  const currentSelection = activeTab === 'faculty' 
-    ? FACULTY_DATA.find(f => f.id === selectedUserId) 
-    : BATCH_DATA.find(b => b.id === selectedUserId);
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -62,9 +73,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                  </nav>
             </div>
             
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 dark:text-gray-200">Select User</label>
+                <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                  {activeTab === 'faculty' ? 'Select Faculty' : 'Select Batch'}
+                </label>
                 <select
                   id="user-select"
                   value={selectedUserId}
@@ -79,23 +92,39 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </select>
               </div>
 
-              <div className="mt-4">
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">Email address</label>
+              {activeTab === 'faculty' && (
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    Verification Email
+                  </label>
                   <div className="mt-1">
-                      {/* FIX: The original logic could cause a runtime error if `currentSelection` was undefined. This updated logic safely handles that case. */}
-                      {/* FIX: Changed `value` to `defaultValue` for the read-only email input to resolve a potential type inference issue. */}
-                      <input type="email" name="email" id="email" defaultValue={currentSelection ? ('email' in currentSelection ? currentSelection.email : `${currentSelection.id.toLowerCase()}@university.edu`) : ''} readOnly className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-200 dark:bg-gray-900/50 text-gray-500 dark:text-gray-400 cursor-not-allowed" />
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200"
+                      placeholder="e.g., e.reed@university.edu"
+                    />
                   </div>
-              </div>
+                </div>
+              )}
 
-              <div className="mt-4">
+              <div>
                   <label htmlFor="password"className="block text-sm font-medium text-gray-700 dark:text-gray-200">Password</label>
                   <div className="mt-1">
                       <input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200" />
                   </div>
               </div>
               
-              <div className="mt-8">
+              {error && (
+                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
+              )}
+
+              <div className="pt-4">
                 <button type="submit" className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105">
                   Sign in
                 </button>
