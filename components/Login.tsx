@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useEffect } from 'react';
 import { CalendarIcon } from './Icons';
 import type { UserRole } from '../App';
@@ -13,7 +10,8 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [activeTab, setActiveTab] = useState<UserRole>('faculty');
   const [selectedUserId, setSelectedUserId] = useState<string>(FACULTY_DATA[0].id);
-  // FIX: Added state to make the password input a controlled component.
+  // FIX: Initialize password state. An uninitialized useState() hook would infer the type as 'unknown',
+  // which is not assignable to an input's `value` property and causes a type error.
   const [password, setPassword] = useState('password');
 
   useEffect(() => {
@@ -93,7 +91,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="mt-4">
                   <label htmlFor="password"className="block text-sm font-medium text-gray-700 dark:text-gray-200">Password</label>
                   <div className="mt-1">
-                      {/* FIX: Converted to a controlled component to follow best practices for editable fields and resolve the type error. */}
                       <input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200" />
                   </div>
               </div>

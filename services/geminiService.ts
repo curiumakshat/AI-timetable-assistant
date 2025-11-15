@@ -99,12 +99,16 @@ export const askAI = async (
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
+    const today = new Date();
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const todayString = today.toLocaleDateString('en-US', options);
+
     const fullPrompt = `
       You are an intelligent and friendly university timetable assistant.
       Your task is to answer questions based on the provided master schedule.
       The user is ${currentUser.name}, who is a ${currentUser.role}. Tailor your response to them. When they ask about "my schedule" or "my classes", filter the master schedule for their events (facultyId: ${currentUser.id} or batchId: ${currentUser.id}).
 
-      **Today is Monday.**
+      **Today is ${todayString}.**
 
       **University Master Schedule:**
       ${JSON.stringify(masterSchedule, null, 2)}

@@ -70,6 +70,7 @@ export interface SchedulePromptProps {
   masterSchedule: Schedule;
   currentUser: Faculty;
   onScheduleUpdate: (newEvent: ScheduleEvent) => void;
+  onBulkScheduleUpdate: (newEvents: Omit<ScheduleEvent, 'id'>[]) => void;
   initialPrompt?: string;
 }
 
