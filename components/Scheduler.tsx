@@ -1,11 +1,7 @@
-
-import React from 'react';
-import { DAYS_OF_WEEK, TIME_SLOTS } from '../constants';
-import type { Schedule, ScheduleEvent, DayOfWeek } from '../types';
-
-interface SchedulerProps {
-  schedule: Schedule;
-}
+import React, { useMemo } from 'react';
+import { DAYS_OF_WEEK, TIME_SLOTS, getSubjectById, getFacultyById, getClassroomById } from '../database';
+import type { Schedule, ScheduleEvent, DayOfWeek, DayGroupedSchedule, SchedulerProps } from '../types';
+import { findConflicts } from '../utils';
 
 const getEventGridPosition = (event: ScheduleEvent) => {
   const startHour = parseInt(event.startTime.split(':')[0], 10);
@@ -22,29 +18,57 @@ const getEventGridPosition = (event: ScheduleEvent) => {
   };
 };
 
-const EventCard: React.FC<{ event: ScheduleEvent }> = ({ event }) => {
+const EventCard: React.FC<{ event: ScheduleEvent; conflict?: { type: string; message: string } }> = ({ event, conflict }) => {
+  const subject = getSubjectById(event.subjectId);
+  const faculty = getFacultyById(event.facultyId);
+  const classroom = getClassroomById(event.classroomId);
   const duration = parseInt(event.endTime.split(':')[0]) - parseInt(event.startTime.split(':')[0]);
-  const bgColor = duration > 1 ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-blue-100 dark:bg-blue-900/50';
-  const borderColor = duration > 1 ? 'border-indigo-400' : 'border-blue-400';
+
+  const baseBgColor = duration > 1 ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-blue-100 dark:bg-blue-900/50';
+  const baseBorderColor = duration > 1 ? 'border-indigo-400' : 'border-blue-400';
+  
+  const conflictColors = {
+    'workload': 'bg-amber-100 dark:bg-amber-900/50 border-amber-400',
+    'double-booking': 'bg-red-100 dark:bg-red-900/50 border-red-400',
+  };
+  
+  const conflictClass = conflict ? conflictColors[conflict.type as keyof typeof conflictColors] || conflictColors['double-booking'] : '';
 
   return (
       <div 
-        className={`p-2 rounded-lg border-l-4 ${borderColor} ${bgColor} text-gray-800 dark:text-gray-200 overflow-hidden text-xs md:text-sm`}
+        className={`p-2 rounded-lg border-l-4 ${conflict ? conflictClass : `${baseBgColor} ${baseBorderColor}`} text-gray-800 dark:text-gray-200 overflow-hidden text-xs md:text-sm transition-colors`}
         style={getEventGridPosition(event)}
+        title={conflict?.message}
       >
-        <p className="font-bold truncate">{event.subject}</p>
-        <p className="text-gray-600 dark:text-gray-400">{event.faculty}</p>
-        <p className="text-gray-600 dark:text-gray-400">Room: {event.room}</p>
+        <p className="font-bold truncate">{subject?.name || 'Unknown Subject'}</p>
+        <p className="text-gray-600 dark:text-gray-400">{faculty?.name || 'Unknown Faculty'}</p>
+        <p className="text-gray-600 dark:text-gray-400">Room: {classroom?.name || 'N/A'}</p>
         <p className="text-gray-500 dark:text-gray-500 hidden md:block">{event.startTime} - {event.endTime}</p>
       </div>
   );
 };
 
 
-const Scheduler: React.FC<SchedulerProps> = ({ schedule }) => {
+const Scheduler: React.FC<SchedulerProps> = ({ schedule, allEvents, currentUser, onVacantSlotClick }) => {
+  const conflicts = useMemo(() => {
+    return findConflicts(allEvents);
+  }, [allEvents]);
+
+  const today = new Date().toLocaleString('en-US', { weekday: 'long' });
+
+  const isSlotOccupied = (day: DayOfWeek, time: string) => {
+    const dayEvents = schedule[day] || [];
+    const slotStart = parseInt(time.split(':')[0], 10);
+    return dayEvents.some(event => {
+        const eventStart = parseInt(event.startTime.split(':')[0], 10);
+        const eventEnd = parseInt(event.endTime.split(':')[0], 10);
+        return slotStart >= eventStart && slotStart < eventEnd;
+    });
+  };
+  
   return (
     <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-xl shadow-lg">
-      <div className="grid grid-cols-6 grid-rows-[auto_repeat(9,1fr)] gap-2 min-h-[80vh]">
+      <div className="grid grid-cols-6" style={{ gridTemplateRows: `auto repeat(${TIME_SLOTS.length}, 4rem)`}}>
         {/* Time column */}
         <div className="col-start-1 row-start-1"></div>
         {TIME_SLOTS.map((time, index) => (
@@ -55,19 +79,38 @@ const Scheduler: React.FC<SchedulerProps> = ({ schedule }) => {
 
         {/* Header row */}
         {DAYS_OF_WEEK.map((day, index) => (
-          <div key={day} className="text-center font-bold text-gray-700 dark:text-gray-200 pb-2 col-start-2" style={{ gridColumn: index + 2 }}>
+          <div key={day} className={`text-center font-bold text-gray-700 dark:text-gray-200 pb-2 rounded-t-lg ${day === today ? 'bg-blue-100 dark:bg-blue-900/50' : ''}`} style={{ gridColumn: index + 2 }}>
             {day}
           </div>
         ))}
         
         {/* Grid lines and content */}
         {DAYS_OF_WEEK.map((day, dayIndex) => (
-            <div key={day} className="col-start-2 relative" style={{ gridColumn: dayIndex + 2, gridRow: '2 / span 9'}}>
-                 <div className="grid grid-rows-9 h-full border-l border-gray-200 dark:border-gray-700">
+            <div key={day} className={`col-start-2 relative rounded-b-lg ${day === today ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''}`} style={{ gridColumn: dayIndex + 2, gridRow: `2 / span ${TIME_SLOTS.length}`}}>
+                 <div className="grid h-full border-l border-gray-200 dark:border-gray-700" style={{ gridTemplateRows: `repeat(${TIME_SLOTS.length}, 1fr)`}}>
                     {TIME_SLOTS.slice(0, -1).map((_, i) => <div key={i} className="border-t border-dashed border-gray-200 dark:border-gray-700"></div>)}
                 </div>
-                <div className="absolute inset-0 grid grid-rows-9">
-                    {(schedule[day] || []).map(event => <EventCard key={event.id} event={event} />)}
+                <div className="absolute inset-0 grid p-1 gap-1" style={{ gridTemplateRows: `repeat(${TIME_SLOTS.length}, 1fr)`}}>
+                    {/* Vacant Slots */}
+                    {currentUser.role === 'faculty' && onVacantSlotClick && TIME_SLOTS.slice(0, -1).map((time, timeIndex) => {
+                        if (isSlotOccupied(day, time)) return null;
+                        return (
+                            <div key={`${day}-${time}`} style={{ gridRow: timeIndex + 1 }}>
+                                <button
+                                    onClick={() => onVacantSlotClick(day, time)}
+                                    className="w-full h-full text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 rounded-md hover:bg-green-100 dark:hover:bg-green-900/60 opacity-60 hover:opacity-100 transition"
+                                >
+                                    Available
+                                </button>
+                            </div>
+                        )
+                    })}
+
+                    {/* Scheduled Events */}
+                    {(schedule[day] || []).map(event => {
+                        const conflict = conflicts.get(event.id);
+                        return <EventCard key={event.id} event={event} conflict={conflict} />;
+                    })}
                 </div>
             </div>
         ))}

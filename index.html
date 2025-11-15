@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -15,6 +14,15 @@
         font-family: 'Inter', sans-serif;
       }
     </style>
+    <!-- Add this script to provide your API key for local development -->
+    <script>
+      window.process = {
+        env: {
+          // IMPORTANT: Replace this with your actual Google Gemini API key
+          API_KEY: "YOUR_API_KEY_HERE"
+        }
+      };
+    </script>
   <script type="importmap">
 {
   "imports": {

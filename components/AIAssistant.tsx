@@ -1,15 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askAI } from '../services/geminiService';
-import type { Schedule, ChatMessage } from '../types';
+import type { Schedule, ChatMessage, AIAssistantProps } from '../types';
 import { BotIcon, UserIcon, SendIcon } from './Icons';
 
-interface AIAssistantProps {
-  facultySchedule: Schedule;
-  studentSchedule: Schedule;
-  userRole: 'faculty' | 'student';
-}
-
-const AIAssistant: React.FC<AIAssistantProps> = ({ facultySchedule, studentSchedule, userRole }) => {
+const AIAssistant: React.FC<AIAssistantProps> = ({ masterSchedule, currentUser }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +25,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ facultySchedule, studentSched
     setError(null);
 
     try {
-      const response = await askAI(input, facultySchedule, studentSchedule, userRole);
+      const response = await askAI(input, masterSchedule, currentUser);
       const assistantMessage: ChatMessage = { role: 'assistant', content: response };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err: any) {

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CalendarIcon } from './Icons';
 
@@ -27,9 +26,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin }) => {
         >
           Get Started
         </button>
-      </div>
-       <div className="absolute bottom-4 text-gray-500 dark:text-gray-400 text-sm">
-        Built for the 24-hour Intense Vibe Coding Hackathon.
       </div>
     </div>
   );
