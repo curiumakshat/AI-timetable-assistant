@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Intelligent Timetable Assistant",
+  "description": "A scheduling platform that autonomously generates and optimizes academic timetables. Teachers can use natural language to schedule extra classes, and an AI assistant provides optimized suggestions based on faculty, student, and classroom availability, avoiding conflicts and student burnout.",
+  "requestFramePermissions": []
+}
