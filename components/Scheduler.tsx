@@ -102,6 +102,8 @@ const EventCard: React.FC<{ event: ScheduleEvent; conflict?: { type: string; mes
   );
 };
 
+const MemoizedEventCard = React.memo(EventCard);
+
 
 const Scheduler: React.FC<SchedulerProps> = ({ schedule, allEvents, currentUser, onVacantSlotClick, onEventStatusUpdate, onApproveCancellation, onRejectCancellation, onRejectReschedule, onCancelClass, onFindRescheduleSuggestions, onCommitReschedule }) => {
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null);
@@ -198,7 +200,7 @@ const Scheduler: React.FC<SchedulerProps> = ({ schedule, allEvents, currentUser,
                       {/* Scheduled Events */}
                       {(schedule[day] || []).map(event => {
                           const conflict = conflicts.get(event.id);
-                          return <EventCard key={event.id} event={event} conflict={conflict} onClick={() => setSelectedEvent(event)} />;
+                          return <MemoizedEventCard key={event.id} event={event} conflict={conflict} onClick={() => setSelectedEvent(event)} />;
                       })}
                   </div>
               </div>

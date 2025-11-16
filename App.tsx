@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import Header from './components/Header';
 import Login from './components/Login';
 import LandingPage from './components/LandingPage';
@@ -39,7 +39,7 @@ const App: React.FC = () => {
   const [isBookClubModalOpen, setIsBookClubModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ day: DayOfWeek, startTime: string } | null>(null);
 
-  const addNotification = (message: string, recipientId: string) => {
+  const addNotification = useCallback((message: string, recipientId: string) => {
     const newNotification: AppNotification = {
       id: Date.now(),
       message,
@@ -48,7 +48,7 @@ const App: React.FC = () => {
       read: false,
     };
     setNotifications(prev => [...prev, newNotification]);
-  };
+  }, []);
 
   const handleLogin = (userId: string, role: UserRole) => {
     if (role === 'faculty') {
@@ -77,7 +77,7 @@ const App: React.FC = () => {
     setView('login');
   };
 
-  const handleScheduleUpdate = (newEvent: ScheduleEvent) => {
+  const handleScheduleUpdate = useCallback((newEvent: ScheduleEvent) => {
     setMasterSchedule(prevSchedule => [...prevSchedule, newEvent]);
     if (newEvent.batchId) {
         addNotification(
@@ -85,17 +85,17 @@ const App: React.FC = () => {
           newEvent.batchId
         );
     }
-  };
+  }, [addNotification]);
 
-  const handleAddClubEvent = (newEvent: Omit<ScheduleEvent, 'id'>) => {
+  const handleAddClubEvent = useCallback((newEvent: Omit<ScheduleEvent, 'id'>) => {
     setMasterSchedule(prev => [...prev, { ...newEvent, id: `club-${Date.now()}` }]);
     const club = getClubById(newEvent.clubId);
     if (club) {
         // Maybe notify someone in the future? For now, just add it.
     }
-  };
+  }, []);
 
-  const handleBulkScheduleUpdate = (newEvents: Omit<ScheduleEvent, 'id'>[]) => {
+  const handleBulkScheduleUpdate = useCallback((newEvents: Omit<ScheduleEvent, 'id'>[]) => {
     const eventsWithIds = newEvents.map((event, index) => ({
         ...event,
         id: `import-${Date.now()}-${index}`
@@ -111,9 +111,9 @@ const App: React.FC = () => {
             );
         }
     });
-  };
+  }, [addNotification]);
 
-  const handleVacantSlotClick = (day: DayOfWeek, startTime: string) => {
+  const handleVacantSlotClick = useCallback((day: DayOfWeek, startTime: string) => {
     if (currentUser?.role === 'coordinator') {
         setSelectedSlot({ day, startTime });
         setIsBookClubModalOpen(true);
@@ -138,9 +138,9 @@ const App: React.FC = () => {
         promptTextarea.focus();
         promptTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-  };
+  }, [currentUser, scheduleView, selectedRoomId, selectedBatchId]);
   
-  const handleEventStatusUpdate = (eventId: string, status: 'cancellation_requested' | 'reschedule_requested') => {
+  const handleEventStatusUpdate = useCallback((eventId: string, status: 'cancellation_requested' | 'reschedule_requested') => {
     const event = masterSchedule.find(e => e.id === eventId);
     if (event && event.facultyId && event.batchId) {
         const subject = getSubjectById(event.subjectId);
@@ -157,9 +157,9 @@ const App: React.FC = () => {
         event.id === eventId ? { ...event, status } : event
       )
     );
-  };
+  }, [masterSchedule, addNotification]);
 
-  const handleApproveCancellation = (eventId: string) => {
+  const handleApproveCancellation = useCallback((eventId: string) => {
     const event = masterSchedule.find(e => e.id === eventId);
     if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
@@ -169,9 +169,9 @@ const App: React.FC = () => {
         );
     }
     setMasterSchedule(prevSchedule => prevSchedule.filter(e => e.id !== eventId));
-  };
+  }, [masterSchedule, addNotification]);
 
-  const handleRejectCancellation = (eventId: string) => {
+  const handleRejectCancellation = useCallback((eventId: string) => {
     const event = masterSchedule.find(e => e.id === eventId);
      if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
@@ -189,9 +189,9 @@ const App: React.FC = () => {
         return e;
       })
     );
-  };
+  }, [masterSchedule, addNotification]);
   
-  const handleCancelClass = (eventId: string) => {
+  const handleCancelClass = useCallback((eventId: string) => {
     const event = masterSchedule.find(e => e.id === eventId);
     if (event) {
         if (event.batchId) {
@@ -205,9 +205,9 @@ const App: React.FC = () => {
         // Also works for club events now
     }
     setMasterSchedule(prevSchedule => prevSchedule.filter(e => e.id !== eventId));
-  };
+  }, [masterSchedule, addNotification]);
 
-  const handleFindRescheduleSuggestions = async (eventToReschedule: ScheduleEvent): Promise<AISuggestion[]> => {
+  const handleFindRescheduleSuggestions = useCallback(async (eventToReschedule: ScheduleEvent): Promise<AISuggestion[]> => {
     const scheduleForAnalysis = masterSchedule.filter(e => e.id !== eventToReschedule.id);
     
     const subject = getSubjectById(eventToReschedule.subjectId);
@@ -256,9 +256,9 @@ const App: React.FC = () => {
       console.error("Failed to get reschedule options:", error);
       throw error;
     }
-  };
+  }, [masterSchedule]);
 
-  const handleCommitReschedule = (originalEventId: string, suggestion: AISuggestion) => {
+  const handleCommitReschedule = useCallback((originalEventId: string, suggestion: AISuggestion) => {
     const event = masterSchedule.find(e => e.id === originalEventId);
     if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
@@ -288,9 +288,9 @@ const App: React.FC = () => {
         return e;
       });
     });
-  };
+  }, [masterSchedule, addNotification]);
 
-  const handleRejectReschedule = (eventId: string) => {
+  const handleRejectReschedule = useCallback((eventId: string) => {
      const event = masterSchedule.find(e => e.id === eventId);
      if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
@@ -308,18 +308,18 @@ const App: React.FC = () => {
         return e;
       })
     );
-  };
+  }, [masterSchedule, addNotification]);
 
-  const handleMarkNotificationsAsRead = () => {
+  const handleMarkNotificationsAsRead = useCallback(() => {
     if (!currentUser) return;
     setNotifications(prev => 
         prev.map(n => 
             n.recipientId === currentUser.id && !n.read ? { ...n, read: true } : n
         )
     );
-  };
+  }, [currentUser]);
 
-  const handlePublishTimetable = (newSchedule: Schedule) => {
+  const handlePublishTimetable = useCallback((newSchedule: Schedule) => {
     setMasterSchedule(newSchedule);
     BATCH_DATA.forEach(batch => {
       addNotification(
@@ -333,7 +333,7 @@ const App: React.FC = () => {
         faculty.id
       );
     })
-  };
+  }, [addNotification]);
 
   const currentUserSchedule = useMemo(() => {
     if (!currentUser) return [];
