@@ -1,46 +1,69 @@
-import type { DayOfWeek, Schedule, Faculty, Subject, Batch, Classroom } from './types';
+import type { DayOfWeek, Schedule, Faculty, Subject, Batch, Classroom, Admin, Coordinator, Club } from './types';
 
-export const DAYS_OF_WEEK: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+export const DAYS_OF_WEEK: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const TIME_SLOTS = [
-  '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
+  '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'
 ];
 
 export const SUBJECT_DATA: Subject[] = [
-    { id: 'S1', name: 'Advanced Algorithms' },
-    { id: 'S2', name: 'Compilers' },
-    { id: 'S3', name: 'Data Science' },
-    { id: 'S4', name: 'Machine Learning' },
-    { id: 'S5', name: 'Software Engineering' },
+    { id: 'S1', name: 'Chemistry', requiresLab: false },
+    { id: 'S2', name: 'Computer progranning', requiresLab: false },
+    { id: 'S3', name: 'Engineering graphics', requiresLab: true },
+    { id: 'S4', name: 'Electronics', requiresLab: true },
+    { id: 'S5', name: 'Calculus', requiresLab: false },
+    { id: 'S6', name: 'AOC-112', requiresLab: false },
+    { id: 'S7', name: 'AOC-121', requiresLab: false },
+    { id: 'S8', name: 'AOC-201', requiresLab: false },
 ];
 
-// Fix: Add email addresses to faculty data to match the Faculty type.
 export const FACULTY_DATA: Faculty[] = [
-    { id: 'ER', name: 'Dr. Evelyn Reed', subjectId: 'S1', email: 'e.reed@university.edu' },
-    { id: 'BC', name: 'Dr. Ben Carter', subjectId: 'S3', email: 'b.carter@university.edu' },
-    { id: 'IC', name: 'Dr. Isla Chen', subjectId: 'S4', email: 'i.chen@university.edu' },
-    { id: 'LM', name: 'Prof. Leo Maxwell', subjectId: 'S5', email: 'l.maxwell@university.edu' },
-    { id: 'AJ', name: 'Dr. Alan Johnson', subjectId: 'S2', email: 'a.johnson@university.edu' },
+    { id: 'ER', name: 'Dr. Amit Verma', subjectId: 'S1', email: 'amitverma@university.edu' },
+    { id: 'BC', name: 'Dr. Kavi Arya', subjectId: 'S3', email: 'kaviarya@university.edu' },
+    { id: 'IC', name: 'Sujoy Bhore', subjectId: 'S4', email: 'sujoybhoren@university.edu' },
+    { id: 'LM', name: 'Parag Kumar Chaudhuri', subjectId: 'S5', email: 'paragkumarchaudhuri@university.edu' },
+    { id: 'AJ', name: 'Avishek Ghosh', subjectId: 'S2', email: 'avishekghosh@university.edu' },
+    { id: 'AP', name: 'Dr. Anshima Prakash', subjectId: 'S6', email: 'anshimaprakash@university.edu' },
+    { id: 'SK', name: 'Dr. Shakti Kundu', subjectId: 'S7', email: 'shaktikundu@university.edu' },
+    { id: 'PN', name: 'Prof. Pranshant Nair', subjectId: 'S8', email: 'prasantnair@university.edu' },
+];
+
+export const ADMIN_DATA: Admin[] = [
+    { id: 'ADM1', name: 'Dr. Admin Head' }
+];
+
+export const CLUB_DATA: Club[] = [
+    { id: 'C1', name: 'Dance Club' },
+    { id: 'C2', name: 'Art Club' },
+    { id: 'C3', name: 'Kavishala Club' },
+];
+
+export const COORDINATOR_DATA: Coordinator[] = [
+    { id: 'CR1', name: 'Aayushi Ranjan', clubId: 'C1', email: 'a.ranjan@university.edu' },
+    { id: 'CR2', name: 'Sonakshi Sharma', clubId: 'C2', email: 's.sharma@university.edu' },
+    { id: 'CR3', name: 'Aadita Singh', clubId: 'C3', email: 'a.singh@university.edu' },
 ];
 
 export const BATCH_DATA: Batch[] = [
-    { id: 'CS-A', name: 'Batch CS-A' },
-    { id: 'CS-B', name: 'Batch CS-B' },
+    { id: 'CS-A', name: 'Batch CS-A', size: 60 },
+    { id: 'CS-B', name: 'Batch CS-B', size: 55 },
 ];
 
 export const CLASSROOM_DATA: Classroom[] = [
-    { id: 'R1', name: '301A', isLab: false },
-    { id: 'R2', name: '302B', isLab: false },
-    { id: 'R3', name: '401', isLab: false },
-    { id: 'R4', name: '202', isLab: false },
-    { id: 'L1', name: 'Lab 5', isLab: true },
+    { id: 'R1', name: '301A', isLab: false, capacity: 70 },
+    { id: 'R2', name: '302B', isLab: false, capacity: 70 },
+    { id: 'R3', name: '401', isLab: false, capacity: 50 },
+    { id: 'R4', name: '202', isLab: false, capacity: 50 },
+    { id: 'L1', name: 'Lab 5', isLab: true, capacity: 60 },
 ];
 
 // Helper functions to find data by ID
-export const getSubjectById = (id: string) => SUBJECT_DATA.find(s => s.id === id);
-export const getFacultyById = (id: string) => FACULTY_DATA.find(f => f.id === id);
-export const getBatchById = (id: string) => BATCH_DATA.find(b => b.id === id);
-export const getClassroomById = (id: string) => CLASSROOM_DATA.find(c => c.id === id);
+export const getSubjectById = (id?: string) => SUBJECT_DATA.find(s => s.id === id);
+export const getFacultyById = (id?: string) => FACULTY_DATA.find(f => f.id === id);
+export const getBatchById = (id?: string) => BATCH_DATA.find(b => b.id === id);
+export const getClassroomById = (id?: string) => CLASSROOM_DATA.find(c => c.id === id);
+export const getCoordinatorById = (id?: string) => COORDINATOR_DATA.find(c => c.id === id);
+export const getClubById = (id?: string) => CLUB_DATA.find(c => c.id === id);
 
 export const MASTER_SCHEDULE: Schedule = [
     // Batch CS-A

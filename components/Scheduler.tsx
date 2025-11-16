@@ -1,17 +1,25 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { DAYS_OF_WEEK, TIME_SLOTS, getSubjectById, getFacultyById, getClassroomById } from '../database';
-import type { ScheduleEvent, DayOfWeek, SchedulerProps } from '../types';
-import { findConflicts } from '../utils';
+import { DAYS_OF_WEEK, TIME_SLOTS, getSubjectById, getFacultyById, getClassroomById, getClubById, getCoordinatorById } from '../database';
+import type { ScheduleEvent, DayOfWeek, SchedulerProps, UserRole } from '../types';
+import { findConflicts, isBookableSlot } from '../utils';
 import EventDetailsModal from './EventDetailsModal';
 
 const getEventGridPosition = (event: ScheduleEvent) => {
   const startHour = parseInt(event.startTime.split(':')[0], 10);
   const endHour = parseInt(event.endTime.split(':')[0], 10);
   
-  const startRow = TIME_SLOTS.indexOf(`${String(startHour).padStart(2, '0')}:00`) + 2;
+  const startRowIndex = TIME_SLOTS.indexOf(`${String(startHour).padStart(2, '0')}:00`);
+  
+  // Handle cases where start time isn't in our defined slots.
+  if (startRowIndex === -1) {
+    return {};
+  }
+  
+  // The inner grid for events starts at row 1, and indexOf is 0-based. So we add 1.
+  const startRow = startRowIndex + 1;
   const duration = endHour - startHour;
 
-  if (startRow === 1 || duration <= 0) return {};
+  if (duration <= 0) return {};
 
   return {
     gridRowStart: startRow,
@@ -20,16 +28,32 @@ const getEventGridPosition = (event: ScheduleEvent) => {
 };
 
 const EventCard: React.FC<{ event: ScheduleEvent; conflict?: { type: string; message: string }; onClick: () => void; }> = ({ event, conflict, onClick }) => {
+  const isClubEvent = !!event.clubId;
+  
+  // Academic Info
   const subject = getSubjectById(event.subjectId);
   const faculty = getFacultyById(event.facultyId);
+  
+  // Club Info
+  const club = getClubById(event.clubId);
+  const coordinator = getCoordinatorById(event.coordinatorId);
+  
   const classroom = getClassroomById(event.classroomId);
   const duration = parseInt(event.endTime.split(':')[0]) - parseInt(event.startTime.split(':')[0]);
 
   const isCancellationRequested = event.status === 'cancellation_requested';
   const isRescheduleRequested = event.status === 'reschedule_requested';
 
-  const baseBgColor = duration > 1 ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-blue-100 dark:bg-blue-900/50';
-  let baseBorderColor = duration > 1 ? 'border-indigo-400' : 'border-blue-400';
+  let baseBgColor = 'bg-blue-100 dark:bg-blue-900/50';
+  let baseBorderColor = 'border-blue-400';
+
+  if(isClubEvent) {
+    baseBgColor = 'bg-purple-100 dark:bg-purple-900/50';
+    baseBorderColor = 'border-purple-400';
+  } else if (duration > 1) {
+    baseBgColor = 'bg-indigo-100 dark:bg-indigo-900/50';
+    baseBorderColor = 'border-indigo-400';
+  }
   
   if (isCancellationRequested) {
     baseBorderColor = 'border-red-400 dark:border-red-500';
@@ -43,10 +67,11 @@ const EventCard: React.FC<{ event: ScheduleEvent; conflict?: { type: string; mes
   };
   
   const conflictClass = conflict ? conflictColors[conflict.type as keyof typeof conflictColors] || conflictColors['double-booking'] : '';
-
+  
+  const eventName = isClubEvent ? (event.eventName || club?.name) : subject?.name;
   let cardTitle = conflict?.message;
-  if (isCancellationRequested) cardTitle = `Cancellation Requested for ${subject?.name}`;
-  if (isRescheduleRequested) cardTitle = `Reschedule Requested for ${subject?.name}`;
+  if (isCancellationRequested) cardTitle = `Cancellation Requested for ${eventName}`;
+  if (isRescheduleRequested) cardTitle = `Reschedule Requested for ${eventName}`;
 
 
   return (
@@ -55,11 +80,11 @@ const EventCard: React.FC<{ event: ScheduleEvent; conflict?: { type: string; mes
         className={`relative p-2 w-full text-left rounded-lg border-l-4 ${conflict ? conflictClass : `${baseBgColor} ${baseBorderColor}`} text-gray-800 dark:text-gray-200 overflow-hidden text-xs md:text-sm transition-all hover:shadow-lg hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800`}
         style={getEventGridPosition(event)}
         title={cardTitle}
-        aria-label={`View details for ${subject?.name || 'class'} at ${event.startTime}`}
+        aria-label={`View details for ${eventName || 'event'} at ${event.startTime}`}
       >
         <div className={isCancellationRequested ? 'line-through text-gray-500 dark:text-gray-400' : ''}>
-          <p className="font-bold truncate">{subject?.name || 'Unknown Subject'}</p>
-          <p className="text-gray-600 dark:text-gray-400">{faculty?.name || 'Unknown Faculty'}</p>
+          <p className="font-bold truncate">{eventName || 'Unknown Event'}</p>
+          <p className="text-gray-600 dark:text-gray-400">{isClubEvent ? coordinator?.name : faculty?.name || 'Unknown Staff'}</p>
           <p className="text-gray-600 dark:text-gray-400">Room: {classroom?.name || 'N/A'}</p>
           <p className="text-gray-500 dark:text-gray-500 hidden md:block">{event.startTime} - {event.endTime}</p>
         </div>
@@ -150,8 +175,14 @@ const Scheduler: React.FC<SchedulerProps> = ({ schedule, allEvents, currentUser,
                   </div>
                   <div className="absolute inset-0 grid p-1 gap-1" style={{ gridTemplateRows: `repeat(${TIME_SLOTS.length}, 1fr)`}}>
                       {/* Vacant Slots */}
-                      {currentUser.role === 'faculty' && onVacantSlotClick && TIME_SLOTS.slice(0, -1).map((time, timeIndex) => {
+                      {onVacantSlotClick && (currentUser.role === 'faculty' || currentUser.role === 'coordinator') && TIME_SLOTS.slice(0, -1).map((time, timeIndex) => {
                           if (isSlotOccupied(day, time)) return null;
+
+                          const showForFaculty = currentUser.role === 'faculty';
+                          const showForCoordinator = currentUser.role === 'coordinator' && isBookableSlot(day, time);
+                          
+                          if (!showForFaculty && !showForCoordinator) return null;
+
                           return (
                               <div key={`${day}-${time}`} style={{ gridRow: timeIndex + 1 }}>
                                   <button

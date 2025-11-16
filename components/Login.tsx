@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarIcon } from './Icons';
-import type { UserRole } from '../App';
-import { FACULTY_DATA, BATCH_DATA } from '../database';
+import type { UserRole } from '../types';
+import { FACULTY_DATA, BATCH_DATA, ADMIN_DATA, COORDINATOR_DATA } from '../database';
 
 interface LoginProps {
   onLogin: (userId: string, role: UserRole) => void;
@@ -18,8 +18,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     // Reset selection and fields when tab changes
     if (activeTab === 'faculty') {
       setSelectedUserId(FACULTY_DATA[0].id);
-    } else {
+    } else if (activeTab === 'student') {
       setSelectedUserId(BATCH_DATA[0].id);
+    } else if (activeTab === 'admin') {
+      setSelectedUserId(ADMIN_DATA[0].id);
+    } else if (activeTab === 'coordinator') {
+      setSelectedUserId(COORDINATOR_DATA[0].id);
     }
     setEmail('');
     setPassword('');
@@ -37,8 +41,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       } else {
         setError('Email address does not match the selected faculty account.');
       }
+    } else if (activeTab === 'coordinator') {
+      const coordinatorUser = COORDINATOR_DATA.find(c => c.id === selectedUserId);
+      if (coordinatorUser && coordinatorUser.email.toLowerCase() === email.trim().toLowerCase()) {
+        onLogin(selectedUserId, activeTab);
+      } else {
+        setError('Email address does not match the selected coordinator account.');
+      }
     } else {
-      // Student login doesn't require email verification
+      // Student and Admin login doesn't require email verification in this version
       onLogin(selectedUserId, activeTab);
     }
   };
@@ -63,12 +74,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
             <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-                 <nav className="-mb-px flex justify-center space-x-8" aria-label="Tabs">
+                 <nav className="-mb-px flex justify-around sm:justify-center sm:space-x-8" aria-label="Tabs">
                     <button onClick={() => setActiveTab('faculty')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'faculty' ? activeClass : inactiveClass}`}>
                         Faculty
                     </button>
                     <button onClick={() => setActiveTab('student')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'student' ? activeClass : inactiveClass}`}>
                         Student
+                    </button>
+                    <button onClick={() => setActiveTab('coordinator')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'coordinator' ? activeClass : inactiveClass}`}>
+                        Coordinator
+                    </button>
+                    <button onClick={() => setActiveTab('admin')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'admin' ? activeClass : inactiveClass}`}>
+                        Admin
                     </button>
                  </nav>
             </div>
@@ -76,7 +93,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="user-select" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
-                  {activeTab === 'faculty' ? 'Select Faculty' : 'Select Batch'}
+                  {activeTab === 'faculty' && 'Select Faculty'}
+                  {activeTab === 'student' && 'Select Batch'}
+                  {activeTab === 'coordinator' && 'Select Coordinator'}
+                  {activeTab === 'admin' && 'Select Admin'}
                 </label>
                 <select
                   id="user-select"
@@ -84,15 +104,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   onChange={(e) => setSelectedUserId(e.target.value)}
                   className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200"
                 >
-                  {activeTab === 'faculty' ? (
-                    FACULTY_DATA.map(user => <option key={user.id} value={user.id}>{user.name}</option>)
-                  ) : (
-                    BATCH_DATA.map(user => <option key={user.id} value={user.id}>{user.name}</option>)
-                  )}
+                  {activeTab === 'faculty' && FACULTY_DATA.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                  {activeTab === 'student' && BATCH_DATA.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                  {activeTab === 'coordinator' && COORDINATOR_DATA.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                  {activeTab === 'admin' && ADMIN_DATA.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </select>
               </div>
 
-              {activeTab === 'faculty' && (
+              {(activeTab === 'faculty' || activeTab === 'coordinator') && (
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                     Verification Email
@@ -107,7 +126,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-200"
-                      placeholder="e.g., e.reed@university.edu"
+                      placeholder="e.g., name@university.edu"
                     />
                   </div>
                 </div>

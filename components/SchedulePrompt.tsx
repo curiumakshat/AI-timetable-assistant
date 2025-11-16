@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getScheduleSuggestion } from '../services/geminiService';
-import type { Schedule, AIResponse, ScheduleEvent, SchedulePromptProps, Faculty, DayOfWeek } from '../types';
+import type { Schedule, AIResponse, ScheduleEvent, SchedulePromptProps, Faculty, DayOfWeek, Subject, Batch, Classroom } from '../types';
 import { getSubjectById, getBatchById, getClassroomById, BATCH_DATA, SUBJECT_DATA, CLASSROOM_DATA } from '../database';
 import { BotIcon, SparklesIcon, CheckCircleIcon, XCircleIcon, PlusCircleIcon, UploadCloudIcon } from './Icons';
 
@@ -98,7 +98,7 @@ const AnalysisReport: React.FC<{ reasoning: string }> = ({ reasoning }) => {
     );
 };
 
-const SchedulePrompt: React.FC<SchedulePromptProps> = ({ masterSchedule, currentUser, onScheduleUpdate, onBulkScheduleUpdate, initialPrompt }) => {
+const SchedulePrompt: React.FC<SchedulePromptProps> = ({ masterSchedule, currentUser, onScheduleUpdate, onBulkScheduleUpdate, initialPrompt, allSubjects, allBatches, allClassrooms }) => {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<AIResponse | null>(null);
@@ -129,7 +129,7 @@ const SchedulePrompt: React.FC<SchedulePromptProps> = ({ masterSchedule, current
     setUploadStatus('idle');
 
     try {
-      const result = await getScheduleSuggestion(activePrompt, masterSchedule, currentUser);
+      const result = await getScheduleSuggestion(activePrompt, masterSchedule, currentUser, allSubjects, allBatches, allClassrooms);
       setResponse(result);
       if (result.isFeasible && result.newSchedule) {
         setProposedSchedule(result.newSchedule);

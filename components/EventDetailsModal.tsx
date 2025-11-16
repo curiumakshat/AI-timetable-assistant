@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { EventDetailsModalProps, AISuggestion, ScheduleEvent } from '../types';
-import { getSubjectById, getFacultyById, getBatchById, getClassroomById } from '../database';
-import { BookOpenIcon, UserIcon, CalendarIcon, RefreshCwIcon, XCircleIcon, CheckCircleIcon, SparklesIcon } from './Icons';
+import { getSubjectById, getFacultyById, getBatchById, getClassroomById, getClubById, getCoordinatorById } from '../database';
+import { BookOpenIcon, UserIcon, CalendarIcon, RefreshCwIcon, XCircleIcon, CheckCircleIcon, SparklesIcon, MailIcon } from './Icons';
 
 type ConfirmationDetails = {
     title: string;
@@ -18,10 +18,13 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
     const [error, setError] = useState<string | null>(null);
     const [confirmation, setConfirmation] = useState<ConfirmationDetails | null>(null);
 
+    const isClubEvent = !!event.clubId;
     const subject = getSubjectById(event.subjectId);
     const faculty = getFacultyById(event.facultyId);
     const batch = getBatchById(event.batchId);
     const classroom = getClassroomById(event.classroomId);
+    const club = getClubById(event.clubId);
+    const coordinator = getCoordinatorById(event.coordinatorId);
 
     const isCancellationRequested = event.status === 'cancellation_requested';
     const isRescheduleRequested = event.status === 'reschedule_requested';
@@ -83,26 +86,6 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
         if (isRescheduling) return renderRescheduleView();
         
         const actions = {
-            cancelRequest: () => setConfirmation({
-                title: 'Request Cancellation',
-                message: 'This will notify the faculty that you wish to cancel this lecture. Are you sure?',
-                confirmText: 'Yes, Request Cancellation',
-                confirmColor: 'red',
-                onConfirm: () => {
-                    onUpdateStatus(event.id, 'cancellation_requested');
-                    resetViewState();
-                }
-            }),
-            rescheduleRequest: () => setConfirmation({
-                title: 'Request Reschedule',
-                message: 'This will notify the faculty that you wish to reschedule this lecture. Are you sure?',
-                confirmText: 'Yes, Request Reschedule',
-                confirmColor: 'indigo',
-                onConfirm: () => {
-                    onUpdateStatus(event.id, 'reschedule_requested');
-                    resetViewState();
-                }
-            }),
             approveCancellation: () => setConfirmation({
                 title: 'Approve Cancellation',
                 message: 'This will permanently remove the class from the schedule for everyone. This action cannot be undone.',
@@ -115,7 +98,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
             }),
             cancelClass: () => setConfirmation({
                 title: 'Confirm Cancellation',
-                message: 'This will permanently remove the class from the schedule for everyone. This action cannot be undone.',
+                message: `This will permanently remove the class "${subject?.name || 'event'}" from the schedule.`,
                 confirmText: 'Yes, Cancel Class',
                 confirmColor: 'red',
                 onConfirm: () => {
@@ -209,7 +192,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
     );
 
     const renderDetailsView = () => {
-         const handleCancelRequest = () => setConfirmation({
+        const handleStudentCancelRequest = () => setConfirmation({
             title: 'Request Cancellation',
             message: 'This will send a cancellation request to the faculty. Are you sure?',
             confirmText: 'Yes, Send Request',
@@ -219,7 +202,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
                 setConfirmation(null);
             }
         });
-        const handleRescheduleRequest = () => setConfirmation({
+        const handleStudentRescheduleRequest = () => setConfirmation({
             title: 'Request Reschedule',
             message: 'This will send a reschedule request to the faculty. Are you sure?',
             confirmText: 'Yes, Send Request',
@@ -229,12 +212,26 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
                 setConfirmation(null);
             }
         });
+        
+        const handleCoordinatorCancel = () => setConfirmation({
+            title: 'Cancel Club Event',
+            message: `Are you sure you want to cancel "${event.eventName || 'this event'}"? This cannot be undone.`,
+            confirmText: 'Yes, Cancel Event',
+            confirmColor: 'red',
+            onConfirm: () => {
+                onCancelClass(event.id);
+                onClose();
+            }
+        });
+
+        const eventName = isClubEvent ? (event.eventName || club?.name) : subject?.name;
+        const mainContact = isClubEvent ? coordinator : faculty;
 
         return (
             <>
                 <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{subject?.name || 'Class Details'}</h3>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{eventName || 'Event Details'}</h3>
                         <p className="text-gray-500 dark:text-gray-400">{event.day}, {event.startTime} - {event.endTime}</p>
                     </div>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" aria-label="Close">
@@ -262,17 +259,28 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
                     <div className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <UserIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400 mr-4 flex-shrink-0" />
                         <div>
-                            <p className="font-semibold text-gray-800 dark:text-gray-200">Faculty</p>
-                            <p className="text-gray-600 dark:text-gray-300">{faculty?.name || 'N/A'}</p>
+                            <p className="font-semibold text-gray-800 dark:text-gray-200">{isClubEvent ? 'Coordinator' : 'Faculty'}</p>
+                             <div className="flex items-center space-x-2">
+                                <p className="text-gray-600 dark:text-gray-300">{mainContact?.name || 'N/A'}</p>
+                                {mainContact?.email && (
+                                    <a href={`mailto:${mainContact.email}`} title={`Email ${mainContact.name}`} className="text-gray-400 hover:text-indigo-500">
+                                        <MailIcon className="w-4 h-4" />
+                                    </a>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                        <BookOpenIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400 mr-4 flex-shrink-0" />
-                        <div>
-                            <p className="font-semibold text-gray-800 dark:text-gray-200">Batch</p>
-                            <p className="text-gray-600 dark:text-gray-300">{batch?.name || 'N/A'}</p>
+                    
+                    {!isClubEvent && (
+                        <div className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <BookOpenIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400 mr-4 flex-shrink-0" />
+                            <div>
+                                <p className="font-semibold text-gray-800 dark:text-gray-200">Batch</p>
+                                <p className="text-gray-600 dark:text-gray-300">{batch?.name || 'N/A'}</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
+                    
                     <div className="flex items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <CalendarIcon className="w-5 h-5 text-indigo-500 dark:text-indigo-400 mr-4 flex-shrink-0" />
                         <div>
@@ -282,15 +290,15 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
                     </div>
                 </div>
 
-                {currentUser.role === 'student' && (
+                {currentUser.role === 'student' && !isClubEvent && (
                     <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                         <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-3 text-center">Need to make a change?</h4>
                         <div className="flex flex-col sm:flex-row justify-center gap-3">
-                            <button onClick={handleRescheduleRequest} disabled={isRescheduleRequested || isCancellationRequested} className="flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600 transition w-full disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleStudentRescheduleRequest} disabled={isRescheduleRequested || isCancellationRequested} className="flex items-center justify-center bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold px-4 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-4 focus:ring-gray-300 dark:focus:ring-gray-600 transition w-full disabled:opacity-50 disabled:cursor-not-allowed">
                                 <RefreshCwIcon className="w-5 h-5 mr-2" />
                                 {isRescheduleRequested ? 'Reschedule Requested' : 'Request Reschedule'}
                             </button>
-                             <button onClick={handleCancelRequest} disabled={isCancellationRequested || isRescheduleRequested} className="flex items-center justify-center bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-semibold px-4 py-2 rounded-lg hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-4 focus:ring-red-300 dark:focus:ring-red-700 transition w-full disabled:opacity-50 disabled:cursor-not-allowed">
+                             <button onClick={handleStudentCancelRequest} disabled={isCancellationRequested || isRescheduleRequested} className="flex items-center justify-center bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 font-semibold px-4 py-2 rounded-lg hover:bg-red-200 dark:hover:bg-red-900 focus:outline-none focus:ring-4 focus:ring-red-300 dark:focus:ring-red-700 transition w-full disabled:opacity-50 disabled:cursor-not-allowed">
                                 <XCircleIcon className="w-5 h-5 mr-2" />
                                 {isCancellationRequested ? 'Cancellation Requested' : 'Cancel Lecture'}
                             </button>
@@ -298,10 +306,18 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, currentUse
                     </div>
                 )}
 
-                {currentUser.role === 'faculty' && (
+                {currentUser.role === 'faculty' && !isClubEvent && currentUser.id === event.facultyId && (
                   <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                       {renderFacultyActions()}
                   </div>
+                )}
+                
+                {currentUser.role === 'coordinator' && isClubEvent && currentUser.id === event.coordinatorId && (
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <button onClick={handleCoordinatorCancel} className="w-full flex items-center justify-center bg-red-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-300 dark:focus:ring-red-700 transition">
+                            <XCircleIcon className="w-5 h-5 mr-2" /> Cancel Event
+                        </button>
+                    </div>
                 )}
             </>
         )

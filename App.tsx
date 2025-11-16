@@ -6,14 +6,15 @@ import Scheduler from './components/Scheduler';
 import SchedulePrompt from './components/SchedulePrompt';
 import AIAssistant from './components/AIAssistant';
 import FacultyDirectory from './components/FacultyDirectory';
-import { MASTER_SCHEDULE, FACULTY_DATA, BATCH_DATA, CLASSROOM_DATA, getClassroomById, getBatchById, getSubjectById, getFacultyById } from './database';
-import type { Schedule, ScheduleEvent, DayOfWeek, DayGroupedSchedule, Faculty, Batch, AISuggestion, AppNotification } from './types';
+import AdminDashboard from './components/AdminDashboard';
+import BookClubModal from './components/BookClubModal';
+import { MASTER_SCHEDULE, FACULTY_DATA, BATCH_DATA, CLASSROOM_DATA, getSubjectById, getFacultyById, getBatchById, getClassroomById, SUBJECT_DATA, ADMIN_DATA, COORDINATOR_DATA, getClubById } from './database';
+import type { Schedule, ScheduleEvent, DayOfWeek, DayGroupedSchedule, Faculty, Batch, AISuggestion, AppNotification, Subject, Classroom, UserRole, Admin, Coordinator } from './types';
 import { getScheduleSuggestion } from './services/geminiService';
 
-export type UserRole = 'faculty' | 'student';
 type View = 'landing' | 'login' | 'dashboard';
 type ScheduleView = 'personal' | 'batch' | 'room';
-type CurrentUser = (Faculty & { role: 'faculty' }) | (Batch & { role: 'student' });
+type CurrentUser = (Faculty & { role: 'faculty' }) | (Batch & { role: 'student' }) | (Admin & { role: 'admin' }) | (Coordinator & { role: 'coordinator' });
 
 const groupScheduleByDay = (schedule: Schedule): DayGroupedSchedule => {
     return schedule.reduce((acc, event) => {
@@ -35,6 +36,8 @@ const App: React.FC = () => {
   const [scheduleView, setScheduleView] = useState<ScheduleView>('personal');
   const [selectedRoomId, setSelectedRoomId] = useState<string>(CLASSROOM_DATA[0].id);
   const [selectedBatchId, setSelectedBatchId] = useState<string>(BATCH_DATA[0].id);
+  const [isBookClubModalOpen, setIsBookClubModalOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ day: DayOfWeek, startTime: string } | null>(null);
 
   const addNotification = (message: string, recipientId: string) => {
     const newNotification: AppNotification = {
@@ -51,10 +54,17 @@ const App: React.FC = () => {
     if (role === 'faculty') {
         const facultyUser = FACULTY_DATA.find(f => f.id === userId);
         if (facultyUser) setCurrentUser({ ...facultyUser, role });
-    } else {
+    } else if (role === 'student') {
         const studentUser = BATCH_DATA.find(b => b.id === userId);
         if (studentUser) setCurrentUser({ ...studentUser, role });
+    } else if (role === 'admin') {
+        const adminUser = ADMIN_DATA.find(a => a.id === userId);
+        if (adminUser) setCurrentUser({ ...adminUser, role });
+    } else if (role === 'coordinator') {
+        const coordinatorUser = COORDINATOR_DATA.find(c => c.id === userId);
+        if (coordinatorUser) setCurrentUser({ ...coordinatorUser, role });
     }
+    setScheduleView('personal'); // Reset view on new login
     setView('dashboard');
   };
 
@@ -69,10 +79,20 @@ const App: React.FC = () => {
 
   const handleScheduleUpdate = (newEvent: ScheduleEvent) => {
     setMasterSchedule(prevSchedule => [...prevSchedule, newEvent]);
-    addNotification(
-      `A new class, "${getSubjectById(newEvent.subjectId)?.name}", has been added to your schedule.`,
-      newEvent.batchId
-    );
+    if (newEvent.batchId) {
+        addNotification(
+          `A new class, "${getSubjectById(newEvent.subjectId)?.name}", has been added to your schedule.`,
+          newEvent.batchId
+        );
+    }
+  };
+
+  const handleAddClubEvent = (newEvent: Omit<ScheduleEvent, 'id'>) => {
+    setMasterSchedule(prev => [...prev, { ...newEvent, id: `club-${Date.now()}` }]);
+    const club = getClubById(newEvent.clubId);
+    if (club) {
+        // Maybe notify someone in the future? For now, just add it.
+    }
   };
 
   const handleBulkScheduleUpdate = (newEvents: Omit<ScheduleEvent, 'id'>[]) => {
@@ -84,14 +104,22 @@ const App: React.FC = () => {
     // Notify all affected batches
     const batchesAffected = [...new Set(newEvents.map(e => e.batchId))];
     batchesAffected.forEach(batchId => {
-        addNotification(
-            `Multiple new classes have been imported and added to your schedule.`,
-            batchId
-        );
+        if (batchId) {
+            addNotification(
+                `Multiple new classes have been imported and added to your schedule.`,
+                batchId
+            );
+        }
     });
   };
 
   const handleVacantSlotClick = (day: DayOfWeek, startTime: string) => {
+    if (currentUser?.role === 'coordinator') {
+        setSelectedSlot({ day, startTime });
+        setIsBookClubModalOpen(true);
+        return;
+    }
+      
     const endTime = `${String(parseInt(startTime.split(':')[0]) + 1).padStart(2, '0')}:00`;
     let prompt;
     if (scheduleView === 'room') {
@@ -114,7 +142,7 @@ const App: React.FC = () => {
   
   const handleEventStatusUpdate = (eventId: string, status: 'cancellation_requested' | 'reschedule_requested') => {
     const event = masterSchedule.find(e => e.id === eventId);
-    if (event) {
+    if (event && event.facultyId && event.batchId) {
         const subject = getSubjectById(event.subjectId);
         const batch = getBatchById(event.batchId);
         const requestType = status === 'cancellation_requested' ? 'cancellation' : 'reschedule';
@@ -133,7 +161,7 @@ const App: React.FC = () => {
 
   const handleApproveCancellation = (eventId: string) => {
     const event = masterSchedule.find(e => e.id === eventId);
-    if (event) {
+    if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
         addNotification(
             `The cancellation for "${subject?.name}" on ${event.day} at ${event.startTime} has been approved.`,
@@ -145,7 +173,7 @@ const App: React.FC = () => {
 
   const handleRejectCancellation = (eventId: string) => {
     const event = masterSchedule.find(e => e.id === eventId);
-     if (event) {
+     if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
         addNotification(
             `Your cancellation request for "${subject?.name}" on ${event.day} was rejected.`,
@@ -166,12 +194,15 @@ const App: React.FC = () => {
   const handleCancelClass = (eventId: string) => {
     const event = masterSchedule.find(e => e.id === eventId);
     if (event) {
-        const subject = getSubjectById(event.subjectId);
-        const faculty = getFacultyById(event.facultyId);
-        addNotification(
-            `The class "${subject?.name}" on ${event.day} at ${event.startTime} was cancelled by ${faculty?.name}.`,
-            event.batchId
-        );
+        if (event.batchId) {
+            const subject = getSubjectById(event.subjectId);
+            const faculty = getFacultyById(event.facultyId);
+            addNotification(
+                `The class "${subject?.name}" on ${event.day} at ${event.startTime} was cancelled by ${faculty?.name}.`,
+                event.batchId
+            );
+        }
+        // Also works for club events now
     }
     setMasterSchedule(prevSchedule => prevSchedule.filter(e => e.id !== eventId));
   };
@@ -198,21 +229,28 @@ const App: React.FC = () => {
       - Faculty: "${faculty?.name}"
       - Duration: ${duration} hour(s)
       - Original Time: ${eventToReschedule.day} at ${eventToReschedule.startTime}
+      
+      University Resources:
+      - Subjects: ${JSON.stringify(SUBJECT_DATA, null, 2)}
+      - Student Batches: ${JSON.stringify(BATCH_DATA, null, 2)}
+      - Classrooms: ${JSON.stringify(CLASSROOM_DATA, null, 2)}
 
       Constraints to consider:
       1. No Overlaps: The new slot must be free for the faculty (${faculty?.name}), the student batch (${batch?.name}), and a suitable classroom.
       2. Student Workload: Avoid suggesting a slot if it results in the student batch having more than 3 consecutive hours of classes.
-      3. Working Hours: Suggestions must be between 09:00 and 17:00.
+      3. Lab Requirements: If the subject ("${subject?.name}") requires a lab, the suggested classroom must be a lab.
+      4. Classroom Capacity: The suggested classroom's capacity must be sufficient for the batch ("${batch?.name}").
+      5. Working Hours: Normal class hours are Mon-Fri, 09:00-17:00. For rescheduling, you can also suggest slots in the evening up to 20:00 or on Saturday.
 
       University Master Schedule (with the original class removed for analysis):
       ${JSON.stringify(scheduleForAnalysis, null, 2)}
 
       Request:
-      Please find up to 3 suitable, conflict-free alternative slots for this class. If you find any valid slots, set 'isFeasible' to true and list them in 'suggestions'. Provide a brief reasoning for your analysis. Do not populate the 'newSchedule' field.
+      Please find up to 3 suitable, conflict-free alternative slots for this class. If you find any valid slots, set 'isFeasible' to true and list them in 'suggestions'. Provide a brief reasoning for your analysis. Do not populate the 'newSchedule' field. Your suggestions must adhere to all constraints, including lab and capacity requirements.
     `;
 
     try {
-      const result = await getScheduleSuggestion(prompt, scheduleForAnalysis, faculty);
+      const result = await getScheduleSuggestion(prompt, scheduleForAnalysis, faculty, SUBJECT_DATA, BATCH_DATA, CLASSROOM_DATA);
       return result.suggestions || [];
     } catch (error) {
       console.error("Failed to get reschedule options:", error);
@@ -222,7 +260,7 @@ const App: React.FC = () => {
 
   const handleCommitReschedule = (originalEventId: string, suggestion: AISuggestion) => {
     const event = masterSchedule.find(e => e.id === originalEventId);
-    if (event) {
+    if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
         addNotification(
             `"${subject?.name}" has been rescheduled to ${suggestion.day} at ${suggestion.startTime}.`,
@@ -254,7 +292,7 @@ const App: React.FC = () => {
 
   const handleRejectReschedule = (eventId: string) => {
      const event = masterSchedule.find(e => e.id === eventId);
-     if (event) {
+     if (event && event.batchId) {
         const subject = getSubjectById(event.subjectId);
         addNotification(
             `Your reschedule request for "${subject?.name}" on ${event.day} was rejected.`,
@@ -281,12 +319,36 @@ const App: React.FC = () => {
     );
   };
 
+  const handlePublishTimetable = (newSchedule: Schedule) => {
+    setMasterSchedule(newSchedule);
+    BATCH_DATA.forEach(batch => {
+      addNotification(
+        'A new university timetable has been published by the admin.',
+        batch.id
+      );
+    });
+    FACULTY_DATA.forEach(faculty => {
+        addNotification(
+        'A new university timetable has been published by the admin.',
+        faculty.id
+      );
+    })
+  };
+
   const currentUserSchedule = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'faculty') {
         return masterSchedule.filter(event => event.facultyId === currentUser.id);
     }
-    return masterSchedule.filter(event => event.batchId === currentUser.id);
+    if (currentUser.role === 'student') {
+        return masterSchedule.filter(event => event.batchId === currentUser.id);
+    }
+    if (currentUser.role === 'coordinator') {
+        // Show all events, so coordinators can see academic schedule
+        return masterSchedule;
+    }
+    // For admin, show everything.
+    return masterSchedule;
   }, [currentUser, masterSchedule]);
   
   const roomSchedule = useMemo(() => {
@@ -319,6 +381,8 @@ const App: React.FC = () => {
         const batchName = getBatchById(selectedBatchId)?.name;
         return batchName ? `Schedule for ${batchName}` : 'Batch Schedule';
     }
+    if (currentUser?.role === 'admin') return 'University Schedule';
+    if (currentUser?.role === 'coordinator') return 'University Schedule';
     return currentUser ? `${currentUser.name}'s Weekly Schedule` : 'Weekly Schedule';
   }, [scheduleView, selectedRoomId, selectedBatchId, currentUser]);
 
@@ -329,6 +393,24 @@ const App: React.FC = () => {
   
   if (view === 'login' || !currentUser) {
     return <Login onLogin={handleLogin} />;
+  }
+
+  if (currentUser.role === 'admin') {
+      return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+            <Header 
+                userName={currentUser.name} 
+                userRole={currentUser.role} 
+                onLogout={handleLogout}
+                notifications={[]}
+                onMarkNotificationsAsRead={() => {}}
+            />
+            <AdminDashboard 
+                currentUser={currentUser as Admin}
+                onPublishTimetable={handlePublishTimetable}
+            />
+        </div>
+      )
   }
   
   const tabButtonClass = (isActive: boolean) => 
@@ -347,17 +429,29 @@ const App: React.FC = () => {
         notifications={currentUserNotifications}
         onMarkNotificationsAsRead={handleMarkNotificationsAsRead}
       />
+      {selectedSlot && currentUser.role === 'coordinator' && (
+          <BookClubModal 
+            isOpen={isBookClubModalOpen}
+            onClose={() => setIsBookClubModalOpen(false)}
+            slot={selectedSlot}
+            currentUser={currentUser as Coordinator}
+            masterSchedule={masterSchedule}
+            onAddClubEvent={handleAddClubEvent}
+          />
+      )}
       <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <h2 className="text-3xl font-bold capitalize">{scheduleTitle}</h2>
             <div className="flex items-center gap-2 sm:gap-4">
                 <div className="p-1 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center text-sm">
                     <button onClick={() => setScheduleView('personal')} className={tabButtonClass(scheduleView === 'personal')}>
-                        My Schedule
+                        {currentUser.role === 'coordinator' ? 'Full Schedule' : 'My Schedule'}
                     </button>
-                    <button onClick={() => setScheduleView('batch')} className={tabButtonClass(scheduleView === 'batch')}>
-                        Batch Schedule
-                    </button>
+                    {currentUser.role !== 'student' && (
+                        <button onClick={() => setScheduleView('batch')} className={tabButtonClass(scheduleView === 'batch')}>
+                            Batch Schedule
+                        </button>
+                    )}
                     <button onClick={() => setScheduleView('room')} className={tabButtonClass(scheduleView === 'room')}>
                         Room Schedule
                     </button>
@@ -405,7 +499,7 @@ const App: React.FC = () => {
             schedule={dayGroupedDisplayedSchedule} 
             allEvents={masterSchedule}
             currentUser={{id: currentUser.id, role: currentUser.role}}
-            onVacantSlotClick={currentUser.role === 'faculty' ? handleVacantSlotClick : undefined}
+            onVacantSlotClick={currentUser.role === 'faculty' || currentUser.role === 'coordinator' ? handleVacantSlotClick : undefined}
             onEventStatusUpdate={handleEventStatusUpdate}
             onApproveCancellation={handleApproveCancellation}
             onRejectCancellation={handleRejectCancellation}
@@ -425,6 +519,9 @@ const App: React.FC = () => {
                         onScheduleUpdate={handleScheduleUpdate}
                         onBulkScheduleUpdate={handleBulkScheduleUpdate}
                         initialPrompt={initialPrompt}
+                        allSubjects={SUBJECT_DATA}
+                        allBatches={BATCH_DATA}
+                        allClassrooms={CLASSROOM_DATA}
                     />
                 </div>
                 <div className="lg:col-span-1">
@@ -436,6 +533,13 @@ const App: React.FC = () => {
               </div>
               <FacultyDirectory faculty={FACULTY_DATA} />
            </>
+        )}
+        
+        {(currentUser.role === 'student' || currentUser.role === 'coordinator') && (
+            <AIAssistant
+                masterSchedule={masterSchedule}
+                currentUser={{id: currentUser.id, name: currentUser.name, role: currentUser.role}}
+            />
         )}
       </main>
     </div>

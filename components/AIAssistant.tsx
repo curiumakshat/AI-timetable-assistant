@@ -83,7 +83,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ masterSchedule, currentUser }
         <div ref={chatEndRef} />
       </div>
       
-      {messages.length === 1 && (
+      {messages.length === 1 && currentUser.role !== 'coordinator' && (
           <div className="mb-4">
               <div className="flex flex-wrap gap-2">
                   {examplePrompts.map(prompt => (
