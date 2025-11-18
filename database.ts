@@ -68,7 +68,7 @@ export const getClubById = (id?: string) => CLUB_DATA.find(c => c.id === id);
 export const MASTER_SCHEDULE: Schedule = [
     // Batch CS-A
     { id: 'e1', subjectId: 'S1', facultyId: 'ER', batchId: 'CS-A', classroomId: 'R1', day: 'Monday', startTime: '10:00', endTime: '11:00' },
-    { id: 'e2', subjectId: 'S3', facultyId: 'BC', batchId: 'CS-A', classroomId: 'L1', day: 'Monday', startTime: '11:00', endTime: '13:00' },
+    { id: 'e2', subjectId: 'S3', facultyId: 'BC', batchId: 'CS-A', classroomId: 'L1', day: 'Monday', startTime: '11:00', endTime: '12:00' },
     { id: 'e3', subjectId: 'S4', facultyId: 'IC', batchId: 'CS-A', classroomId: 'R3', day: 'Tuesday', startTime: '09:00', endTime: '11:00' },
     { id: 'e4', subjectId: 'S1', facultyId: 'ER', batchId: 'CS-A', classroomId: 'R1', day: 'Wednesday', startTime: '09:00', endTime: '10:00' },
     { id: 'e5', subjectId: 'S5', facultyId: 'LM', batchId: 'CS-A', classroomId: 'R4', day: 'Wednesday', startTime: '14:00', endTime: '16:00' },
@@ -78,7 +78,7 @@ export const MASTER_SCHEDULE: Schedule = [
     // Batch CS-B
     { id: 'e8', subjectId: 'S2', facultyId: 'AJ', batchId: 'CS-B', classroomId: 'R2', day: 'Monday', startTime: '11:00', endTime: '12:00' },
     { id: 'e9', subjectId: 'S5', facultyId: 'LM', batchId: 'CS-B', classroomId: 'R4', day: 'Monday', startTime: '14:00', endTime: '16:00' },
-    { id: 'e10', subjectId: 'S3', facultyId: 'BC', batchId: 'CS-B', classroomId: 'L1', day: 'Tuesday', startTime: '11:00', endTime: '13:00' },
+    { id: 'e10', subjectId: 'S3', facultyId: 'BC', batchId: 'CS-B', classroomId: 'L1', day: 'Tuesday', startTime: '11:00', endTime: '12:00' },
     { id: 'e11', subjectId: 'S4', facultyId: 'IC', batchId: 'CS-B', classroomId: 'R3', day: 'Wednesday', startTime: '10:00', endTime: '12:00' },
     { id: 'e12', subjectId: 'S2', facultyId: 'AJ', batchId: 'CS-B', classroomId: 'R2', day: 'Friday', startTime: '14:00', endTime: '15:00' },
 ];

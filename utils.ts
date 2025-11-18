@@ -65,69 +65,40 @@ const checkAndRecordWorkloadConflict = (block: ScheduleEvent[], batch: Batch, co
 
 /**
  * Finds all double-booking conflicts in the master schedule.
+ * Performance optimized to reduce iterations and object creation.
  */
 const findDoubleBookings = (masterSchedule: Schedule): Map<string, Conflict> => {
     const conflicts = new Map<string, Conflict>();
-    const timeSlots: { [key: string]: ScheduleEvent[] } = {};
+    const slotMap = new Map<string, ScheduleEvent>();
 
-    masterSchedule.forEach(event => {
+    for (const event of masterSchedule) {
         const start = parseInt(event.startTime.split(':')[0]);
         const end = parseInt(event.endTime.split(':')[0]);
+
         for (let hour = start; hour < end; hour++) {
-            const key = `${event.day}-${hour}`;
-            if (!timeSlots[key]) timeSlots[key] = [];
-            timeSlots[key].push(event);
-        }
-    });
-
-    for (const key in timeSlots) {
-        const eventsInSlot = timeSlots[key];
-        if (eventsInSlot.length > 1) {
-            // Check for faculty, batch, and room conflicts
-            const facultyCounts: { [id: string]: ScheduleEvent[] } = {};
-            const batchCounts: { [id: string]: ScheduleEvent[] } = {};
-            const roomCounts: { [id: string]: ScheduleEvent[] } = {};
-
-            eventsInSlot.forEach(event => {
-                if(event.facultyId) {
-                    if (!facultyCounts[event.facultyId]) facultyCounts[event.facultyId] = [];
-                    facultyCounts[event.facultyId].push(event);
-                }
-                
-                if(event.batchId) {
-                    if (!batchCounts[event.batchId]) batchCounts[event.batchId] = [];
-                    batchCounts[event.batchId].push(event);
-                }
-
-                if (!roomCounts[event.classroomId]) roomCounts[event.classroomId] = [];
-                roomCounts[event.classroomId].push(event);
-            });
+            const timeKey = `${event.day}-${hour}`;
             
-            const recordConflict = (conflictingEvents: ScheduleEvent[], resourceType: string, resourceName: string) => {
-                 if (conflictingEvents.length > 1) {
-                    const message = `Double Booking: ${resourceType} '${resourceName}' is booked for multiple classes at this time.`;
-                     conflictingEvents.forEach(e => conflicts.set(e.id, { type: 'double-booking', message }));
-                }
-            };
+            // Define all resources to check for this event
+            const resources = [];
+            if (event.facultyId) resources.push({ type: 'Faculty', id: event.facultyId, name: getFacultyById(event.facultyId)?.name });
+            if (event.batchId) resources.push({ type: 'Batch', id: event.batchId, name: getBatchById(event.batchId)?.name });
+            resources.push({ type: 'Room', id: event.classroomId, name: getClassroomById(event.classroomId)?.name });
 
-            Object.values(facultyCounts).forEach(events => {
-                if (events.length > 1) {
-                    const faculty = getFacultyById(events[0].facultyId!);
-                    recordConflict(events, 'Faculty', faculty?.name || events[0].facultyId!);
+            for (const resource of resources) {
+                if (!resource.id) continue;
+                const key = `${resource.type}-${resource.id}-${timeKey}`;
+                
+                if (slotMap.has(key)) {
+                    const conflictingEvent = slotMap.get(key)!;
+                    const message = `Double Booking: ${resource.type} '${resource.name || resource.id}' is booked for multiple classes at this time.`;
+                    
+                    // Mark both events as conflicting
+                    conflicts.set(event.id, { type: 'double-booking', message });
+                    conflicts.set(conflictingEvent.id, { type: 'double-booking', message });
+                } else {
+                    slotMap.set(key, event);
                 }
-            });
-            Object.values(batchCounts).forEach(events => {
-                if (events.length > 1) {
-                    const batch = getBatchById(events[0].batchId!);
-                    recordConflict(events, 'Batch', batch?.name || events[0].batchId!);
-                }
-            });
-            Object.values(roomCounts).forEach(events => {
-                if (events.length > 1) {
-                    const room = getClassroomById(events[0].classroomId);
-                    recordConflict(events, 'Room', room?.name || events[0].classroomId);
-                }
-            });
+            }
         }
     }
 
@@ -154,8 +125,12 @@ export const findConflicts = (masterSchedule: Schedule): Map<string, Conflict> =
 };
 
 export const isBookableSlot = (day: DayOfWeek, startTime: string): boolean => {
-    const now = new Date();
+    // Rule 0: Lunch break is never bookable.
+    if (startTime === '12:00') {
+        return false;
+    }
 
+    const now = new Date();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 

@@ -126,16 +126,21 @@ const Scheduler: React.FC<SchedulerProps> = ({ schedule, allEvents, currentUser,
 
   const today = new Date().toLocaleString('en-US', { weekday: 'long' });
 
-  const isSlotOccupied = (day: DayOfWeek, time: string) => {
-    const dayEvents = schedule[day] || [];
-    const slotStart = parseInt(time.split(':')[0], 10);
-    return dayEvents.some(event => {
-        const eventStart = parseInt(event.startTime.split(':')[0], 10);
-        const eventEnd = parseInt(event.endTime.split(':')[0], 10);
-        return slotStart >= eventStart && slotStart < eventEnd;
+  // Performance Optimization: Memoize a Set of occupied slots for O(1) lookup.
+  const occupiedSlots = useMemo(() => {
+    const slots = new Set<string>();
+    Object.values(schedule).flat().forEach(event => {
+        const startHour = parseInt(event.startTime.split(':')[0]);
+        const endHour = parseInt(event.endTime.split(':')[0]);
+        for (let i = startHour; i < endHour; i++) {
+            slots.add(`${event.day}-${i}`);
+        }
     });
-  };
+    return slots;
+  }, [schedule]);
   
+  const lunchRowIndex = TIME_SLOTS.indexOf('12:00');
+
   return (
     <>
       {selectedEvent && (
@@ -176,9 +181,22 @@ const Scheduler: React.FC<SchedulerProps> = ({ schedule, allEvents, currentUser,
                       {TIME_SLOTS.slice(0, -1).map((_, i) => <div key={i} className="border-t border-dashed border-gray-200 dark:border-gray-700"></div>)}
                   </div>
                   <div className="absolute inset-0 grid p-1 gap-1" style={{ gridTemplateRows: `repeat(${TIME_SLOTS.length}, 1fr)`}}>
+                      {/* Lunch Break Indicator */}
+                      {lunchRowIndex !== -1 && (
+                          <div
+                            style={{ gridRow: lunchRowIndex + 1 }}
+                            className="flex items-center justify-center text-xs font-semibold text-gray-400 bg-gray-100/50 dark:bg-gray-900/40 rounded-md"
+                          >
+                            Lunch Break
+                          </div>
+                      )}
+
                       {/* Vacant Slots */}
                       {onVacantSlotClick && (currentUser.role === 'faculty' || currentUser.role === 'coordinator') && TIME_SLOTS.slice(0, -1).map((time, timeIndex) => {
-                          if (isSlotOccupied(day, time)) return null;
+                          if (time === '12:00') return null; // No booking during lunch
+
+                          const slotHour = parseInt(time.split(':')[0]);
+                          if (occupiedSlots.has(`${day}-${slotHour}`)) return null;
 
                           const showForFaculty = currentUser.role === 'faculty';
                           const showForCoordinator = currentUser.role === 'coordinator' && isBookableSlot(day, time);

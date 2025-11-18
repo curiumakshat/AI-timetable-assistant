@@ -241,6 +241,7 @@ const App: React.FC = () => {
       3. Lab Requirements: If the subject ("${subject?.name}") requires a lab, the suggested classroom must be a lab.
       4. Classroom Capacity: The suggested classroom's capacity must be sufficient for the batch ("${batch?.name}").
       5. Working Hours: Normal class hours are Mon-Fri, 09:00-17:00. For rescheduling, you can also suggest slots in the evening up to 20:00 or on Saturday.
+      6. Lunch Break: Avoid the mandatory 12:00-13:00 lunch break.
 
       University Master Schedule (with the original class removed for analysis):
       ${JSON.stringify(scheduleForAnalysis, null, 2)}

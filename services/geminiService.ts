@@ -75,6 +75,7 @@ export const getScheduleSuggestion = async (
       5.  **Faculty Availability:** The faculty member must be free.
       6.  **Classroom Availability:** The room must be free.
       7.  **Working Hours:** Standard university classes are scheduled Monday to Friday, between 09:00 and 17:00. For this specific request to schedule an *extra* class, you can propose slots on Saturday or in the evenings up to 20:00. Treat these extended hours as exceptions for special cases like this one.
+      8.  **Lunch Break:** A mandatory university-wide lunch break is from 12:00 to 13:00. No classes can be scheduled during this hour.
 
       **University Master Schedule:**
       ${JSON.stringify(masterSchedule, null, 2)}
@@ -85,7 +86,7 @@ export const getScheduleSuggestion = async (
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       contents: fullPrompt,
       config: {
         responseMimeType: "application/json",
@@ -138,6 +139,7 @@ export const askAI = async (
       The user is ${currentUser.name}, who is a ${currentUser.role}. Tailor your response to them. ${filterInstruction}
 
       **Today is ${todayString}.**
+      **Note:** There is a mandatory lunch break from 12:00 to 13:00 every day where no classes are held.
 
       **University Master Schedule:**
       ${JSON.stringify(masterSchedule, null, 2)}
@@ -166,7 +168,7 @@ const generatedTimetablesSchema = {
     items: {
         type: Type.OBJECT,
         properties: {
-            name: { type: Type.STRING, description: "The name of the optimization strategy used (e.g., 'Best Faculty Utilization')." },
+            name: { type: Type.STRING, description: "The name of the optimization strategy used (e.g., 'Faculty Utilization')." },
             reasoning: { type: Type.STRING, description: "A brief explanation of the approach taken for this optimization." },
             schedule: {
                 type: Type.ARRAY,
@@ -216,20 +218,21 @@ export const generateTimetables = async (
       4.  **Classroom Capacity:** The classroom capacity must be greater than or equal to the student batch size.
       5.  **Working Hours:** All classes must be scheduled between Monday and Friday, from 09:00 to 17:00. Do not use Saturday or evening slots.
       6.  **Complete Schedule:** Ensure every subject is scheduled for each batch that should take it. Assume each batch takes every subject taught by the available faculty. The number of hours per subject per week is not strictly defined; use a reasonable distribution (e.g., 2-4 hours per subject).
+      7.  **Lunch Break:** All timetables must have a mandatory lunch break from 12:00 to 13:00 every day. No classes can be scheduled in this slot.
 
       **Optimization Goals:**
       Generate FOUR separate timetables, each optimized for one of the following strategies:
 
-      1.  **"Best Faculty Utilization":** Distribute teaching hours as evenly as possible among all faculty members throughout the week. Avoid concentrating a single faculty's classes on one or two days.
-      2.  **"Best Room Utilization":** Maximize the use of all available classrooms and labs. Minimize idle/empty time slots for all rooms.
-      3.  **"Least Faculty Load":** Minimize instances of faculty teaching for more than 3 consecutive hours. Prioritize breaks between classes for faculty.
-      4.  **"Most Balanced Schedule":** A hybrid approach. Create a well-rounded schedule that avoids major faculty overload, prevents students from having more than 3 consecutive classes, and maintains decent room utilization.
+      1.  **"Faculty Utilization":** Distribute teaching hours as evenly as possible among all faculty members throughout the week. Avoid concentrating a single faculty's classes on one or two days.
+      2.  **"Room Utilization":** Maximize the use of all available classrooms and labs. Minimize idle/empty time slots for all rooms.
+      3.  **"Faculty Load":** Minimize instances of faculty teaching for more than 3 consecutive hours. Prioritize breaks between classes for faculty.
+      4.  **"Balanced Schedule":** A hybrid approach. Create a well-rounded schedule that avoids major faculty overload, prevents students from having more than 3 consecutive classes, and maintains decent room utilization.
 
       Provide your response as a JSON array of 4 objects, where each object represents one of the optimized timetables and includes the strategy name, a brief reasoning, and the full schedule.
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
+      model: 'gemini-2.5-flash',
       contents: fullPrompt,
       config: {
         responseMimeType: "application/json",
